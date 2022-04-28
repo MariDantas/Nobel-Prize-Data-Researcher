@@ -19,123 +19,130 @@ class Program
         string directory;
         string logFilePath;
         string fullUri;
-        char continueResponse;
+        string currentDate = System.DateTime.Today.ToString("dd-MM-yy");
+        string lastLine;
+        string lastResearch;
+        int seconds;
+        TimeSpan elapsed = new TimeSpan();
+
         int contErrors = 0;
-        bool restart = true;
         StringBuilder sb = new StringBuilder();
         HttpClient client = new HttpClient();
         HttpResponseMessage response;
-        Stopwatch watch = new Stopwatch();
-        TimeSpan elapsed = new TimeSpan();
+        TimeSpan time = new TimeSpan();
 
-        do
+        directory = Directory.GetCurrentDirectory();
+        logFilePath = directory + "\\log-" + currentDate + ".log";
+
+        if (File.Exists(logFilePath))
         {
-            Console.Write("Enter the path of your file: ");
-            filePath = Console.ReadLine();
+            lastLine = File.ReadLines(logFilePath).Last();
+            lastResearch = lastLine.Substring(15);
+            time = TimeSpan.Parse(lastResearch);
+            elapsed = DateTime.Now.TimeOfDay.Subtract(time);
 
-            if (filePath != "")
+            if (elapsed.Seconds < 60 && elapsed.Minutes < 1)
             {
-                try
-                {
-                    var lines = File.ReadAllLines(filePath, Encoding.UTF8);
+                seconds = 60 - elapsed.Seconds;
+                Console.WriteLine("Please wait " + seconds + " more seconds.\n");
+                Thread.Sleep(seconds);
+            }
+        }
 
-                    foreach (var line in lines)
-                    {
-                        file.Add(line);
-                    }
+        Console.Write("Enter the path of your file: ");
+        filePath = Console.ReadLine();
+
+        if (filePath != "")
+        {
+            try
+            {
+                var lines = File.ReadAllLines(filePath, Encoding.UTF8);
+
+                foreach (var line in lines)
+                {
+                    file.Add(line);
                 }
-                catch (Exception e)
-                {
-                    Console.WriteLine("An error has occurred!");
-                    Console.WriteLine("Message: {0}", e.ToString());
-                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("An error has occurred!");
+                Console.WriteLine("Message: {0}", e.ToString());
+            }
 
-                for (int i = 0; i < file.Count; i++)
-                {
-                    content = (string?)file[i];
+            for (int i = 0; i < file.Count; i++)
+            {
+                content = (string?)file[i];
 
-                    if (content.Contains(";"))
+                if (content.Contains(";"))
+                {
+                    splitContent = content.Split(";");
+                    category = splitContent[0];
+                    year = splitContent[1];
+                    fullUri = baseUri + category + "/" + year;
+
+                    Console.WriteLine("\nCategory: {0}", category);
+                    Console.WriteLine("Year: {0}", year);
+                    Console.WriteLine("URL used: {0}", fullUri);
+                    Console.WriteLine("Response: \n");
+                    Thread.Sleep(15000);
+
+                    try
                     {
-                        splitContent = content.Split(";");
-                        category = splitContent[0];
-                        year = splitContent[1];
-                        fullUri = baseUri + category + "/" + year;
+                        response = client.GetAsync(baseUri + category + "/" + year).Result;
+                        response.EnsureSuccessStatusCode();
+                        responseBody = response.Content.ReadAsStringAsync().Result;
 
-                        Console.WriteLine("\nCategory: {0}", category);
-                        Console.WriteLine("Year: {0}", year);
-                        Console.WriteLine("URL used: {0}", fullUri);
-                        Console.WriteLine("Response: \n");
-                        Thread.Sleep(15000);
+                        Console.WriteLine(responseBody);
 
-                        try
+                        directory = Directory.GetCurrentDirectory();
+                        logFilePath = directory + "\\log-" + currentDate + ".log";
+
+                        if (!File.Exists(logFilePath))
                         {
-                            response = client.GetAsync(baseUri + category + "/" + year).Result;
-                            response.EnsureSuccessStatusCode();
-                            responseBody = response.Content.ReadAsStringAsync().Result;
-
-                            Console.WriteLine(responseBody);
-
-                            directory = Directory.GetCurrentDirectory();
-                            logFilePath = directory + "\\log-" + System.DateTime.Today.ToString("dd-MM-yy") + ".log";
-
-                            if (!File.Exists(logFilePath))
-                            {
-                                FileStream fs = File.Create(logFilePath);
-                                fs.Close();
-                            }
-
-                            sb.Append(responseBody);
-                            File.AppendAllText(logFilePath, sb.ToString());
-                            sb.Clear();
-
-                            if (!response.IsSuccessStatusCode)
-                            {
-                                contErrors++;
-                            }
-
+                            FileStream fs = File.Create(logFilePath);
+                            fs.Close();
                         }
-                        catch (HttpRequestException e)
+
+                        time = DateTime.Now.TimeOfDay;
+                        sb.Append(responseBody + "\n\n" + "Last searched: " + time);
+                        File.AppendAllText(logFilePath, sb.ToString());
+                        sb.Clear();
+
+                        if (!response.IsSuccessStatusCode)
                         {
-                            Console.WriteLine("\nAn error has ocurred!");
-                            Console.WriteLine("Message: {0}", e.ToString());
+                            contErrors++;
                         }
+
                     }
-                    else
+                    catch (HttpRequestException e)
                     {
-                        Console.WriteLine("Invalid line read! Going to the next line");
+                        Console.WriteLine("\nAn error has ocurred!");
+                        Console.WriteLine("Message: {0}", e.ToString());
                     }
                 }
-
-                if (contErrors == 0)
+                else
                 {
-                    Console.WriteLine("\nProcess finished successfully. Check your default folder for this program" +
-                        " to access the log file.");
+                    Console.WriteLine("Invalid line read! Going to the next line");
                 }
-                else if (contErrors > 0)
-                {
-                    Console.WriteLine("\nProcess finished with {0} errors. Check your default folder for this" +
-                        " program to access the log file.", contErrors);
-                }
-
             }
-            else
+
+            if (contErrors == 0)
             {
-                Console.WriteLine("\nNo file path was entered!");
+                Console.WriteLine("\nProcess finished successfully. Check your default folder for this program" +
+                    " to access the log file.");
             }
-
-            watch.Start();
-            Console.WriteLine("Do you wish to continue? [Y/N]");
-            continueResponse = (char)Console.Read();
-
-            if (continueResponse.Equals("Y"))
+            else if (contErrors > 0)
             {
-                while (watch.ElapsedMilliseconds < 60000)
-                {
-                    Console.WriteLine("Please wait {0}", watch.ElapsedMilliseconds);
-                }
+                Console.WriteLine("\nProcess finished with {0} errors. Check your default folder for this" +
+                    " program to access the log file.", contErrors);
             }
-        } while (restart);
-        
+
+        }
+        else
+        {
+            Console.WriteLine("\nNo file path was entered!");
+        }
+
     }
 
 }
